@@ -1,69 +1,53 @@
 -- ==============================================================================
 -- SHREYA | ENTERPRISE DATA ARCHITECTURE
 -- PROJECT 2: D2C PERFORMANCE MARKETING & CUSTOMER ACQUISITION COST (CAC) AUDIT
--- BACKEND SQL ANALYTICAL MATRIX SCRIPT
+-- BACKEND SQL ANALYTICAL MATRIX SCRIPT (VERIFIED SCHEMATIC COMPLIANCE)
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- KEY METRIC DEFINITIONS FOR RECRUITERS:
--- 1. Click Through Rate (CTR %) = (Total Clicks / Ad Spend) * 100
--- 2. Cost Per Acquisition (CAC) = Total Ad Spend / Conversions (Lower is better)
--- 3. Return On Ad Spend (ROAS) = Total Revenue / Total Ad Spend (Higher is better)
+-- COLUMN STRUCTURAL SCHEMA MAPPING REFERENCE:
+-- c1 = Campaign_ID (Text)
+-- c2 = Channel (Text Platform Description)
+-- c3 = Ad_Spend_INR (Raw Capital Expenditure Strings)
+-- c4 = Conversions (Raw Conversion Event Logs)
+-- c5 = Total_Revenue_INR (Gross Revenue Output Strings)
 -- ------------------------------------------------------------------------------
 
 -- AUDIT QUERY 1: MACRO CHANNEL EFFICIENCY & BUDGET ALLOCATION MATRIX
--- Evaluates which digital advertising platforms are driving profitable conversions.
+-- Groups platform records to calculate accurate Blended ROAS performance weights.
 SELECT 
-    Channel,
-    SUM(Ad_Spend_INR) AS Total_Ad_Spend_INR,
-    SUM(Total_Clicks) AS Cumulative_Clicks,
-    SUM(Conversions) AS Total_Conversions,
-    SUM(Total_Revenue_INR) AS Gross_Revenue_INR,
-    ROUND(AVG(Click_Through_Rate_Pct), 2) AS Average_CTR_Percentage,
-    ROUND(SUM(Ad_Spend_INR) / SUM(Conversions), 2) AS Blended_CAC_INR,
-    ROUND(SUM(Total_Revenue_INR) / SUM(Ad_Spend_INR), 2) AS Blended_ROAS_Multiplier
+    c2 AS Channel,
+    SUM(CAST(c3 AS INTEGER)) AS Total_Ad_Spend_INR,
+    SUM(CAST(c4 AS INTEGER)) AS Cumulative_Conversions,
+    SUM(CAST(c5 AS INTEGER)) AS Gross_Revenue_INR,
+    ROUND(SUM(CAST(c5 AS REAL)) * 1.0 / SUM(CAST(c3 AS REAL)), 2) AS Blended_ROAS_Multiplier
 FROM 
     d2c_marketing_52k
+WHERE 
+    c2 != 'Channel' -- Seamlessly filters out raw database header rows
 GROUP BY 
-    Channel
+    c2
 ORDER BY 
     Gross_Revenue_INR DESC;
 
 
--- AUDIT QUERY 2: CAPITAL WASTE ISOLATION (RED-FLAGGING LOW-ROAS CAMPAIGNS)
--- Pinpoints specific underperforming campaigns where ROAS is bleeding below 1.5x.
+-- AUDIT QUERY 2: CAPITAL WASTE ISOLATION (RED-FLAGGING LOW-ROAS PIPELINES)
+-- Isolates underperforming macro-spend campaigns bleeding revenue margins below 1.5x.
 SELECT 
-    Campaign_ID,
-    Channel,
-    Ad_Spend_INR,
-    Conversions,
-    Total_Revenue_INR,
-    ROUND(Cost_Per_Acquisition_INR, 2) AS Specific_Campaign_CAC,
-    ROUND(Return_On_Ad_Spend_ROAS, 2) AS Campaign_ROAS
+    c1 AS Campaign_ID,
+    c2 AS Channel,
+    CAST(c3 AS INTEGER) AS Campaign_Ad_Spend,
+    CAST(c4 AS INTEGER) AS Campaign_Conversions,
+    CAST(c5 AS INTEGER) AS Campaign_Revenue,
+    ROUND(CAST(c5 AS REAL) * 1.0 / CAST(c3 AS REAL), 2) AS Campaign_ROAS
 FROM 
     d2c_marketing_52k
 WHERE 
-    Ad_Spend_INR > 40000 -- Focuses purely on heavy corporate capital expenditures
+    CAST(c3 AS INTEGER) > 40000 -- Focuses purely on heavy capital deployments
+    AND c2 != 'Channel'
 GROUP BY 
-    Campaign_ID, Channel, Ad_Spend_INR, Conversions, Total_Revenue_INR, Cost_Per_Acquisition_INR, Return_On_Ad_Spend_ROAS
+    c1, c2, c3, c4, c5
 HAVING 
-    Return_On_Ad_Spend_ROAS < 1.50
+    Campaign_ROAS < 1.50
 ORDER BY 
     Campaign_ROAS ASC;
-
-
--- AUDIT QUERY 3: GEOGRAPHIC ACQUISITION WEIGHT & TARGET MARKET DENSITY
--- Analyzes which territorial micro-markets yield the lowest acquisition costs.
-SELECT 
-    Region,
-    COUNT(Campaign_ID) AS Total_Active_Campaigns,
-    SUM(Ad_Spend_INR) AS Regional_Budget_Allocation,
-    SUM(Total_Revenue_INR) AS Regional_Revenue_Generated,
-    ROUND(SUM(Ad_Spend_INR) / SUM(Conversions), 2) AS Regional_Blended_CAC,
-    ROUND(SUM(Total_Revenue_INR) / SUM(Ad_Spend_INR), 2) AS Regional_ROAS_Performance
-FROM 
-    d2c_marketing_52k
-GROUP BY 
-    Region
-ORDER BY 
-    Regional_Blended_CAC ASC;
